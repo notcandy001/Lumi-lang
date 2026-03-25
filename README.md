@@ -1,7 +1,7 @@
 #  Lumi Code, simplified.
 
 > A modern, declarative, English-like programming language powered by Rust.
-> File extension: `.lu` · Entry module: `Nisa`
+> File extension: `.lu` · 
 
 ---
 
