@@ -1,0 +1,5 @@
+lumi:
+  type: programming
+  color: "#654321"
+  aliases: [Lumi, lum]
+  extensions: [.lu]
