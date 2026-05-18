@@ -7,7 +7,7 @@
 
 Lumi is a declarative, English-like programming language for building UI and structured applications.
 File extension: `.lu`  
-Entry keyword: `Nisa` (future: module system root)  
+Entry keyword: `lumi` (future: module system root)  
 Runtime: Rust-powered interpreter (tree-walk, v0.1)
 
 ---
