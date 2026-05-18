@@ -1,68 +1,57 @@
 // ============================================================
-//  Lumi Language — Lexer (Tokenizer)
-//  Converts raw .lu source text into a stream of Tokens
+//  Lumi Language — Lexer  (v0.2)
+//  Converts raw .lu source text into a stream of Tokens.
 // ============================================================
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    // ── Keywords ──────────────────────────────────────────
-    Create,   // create
-    Is,       // is
-    On,       // on
-    If,       // if
-    Else,     // else
-    While,    // while  (future)
-    Print,    // print
-    Let,      // let
-    Set,      // set  (reassignment)
-    True,     // true
-    False,    // false
-    And,      // and
-    Or,       // or
-    Not,      // not
+    // Keywords
+    Create, Is, On, If, Else, While, Print, Say, Let, Set, Return,
+    True, False, And, Or, Not,
+    Equals, Greater, Less, Than,
 
-    // ── Component / Event names (context-sensitive) ───────
+    // Identifiers + Literals
     Identifier(String),
-
-    // ── Literals ──────────────────────────────────────────
     StringLit(String),
     NumberLit(f64),
 
-    // ── Structure ─────────────────────────────────────────
-    Colon,      // :
-    Newline,    // \n
-    Indent,     // synthetic — increase
-    Dedent,     // synthetic — decrease
-    Eof,
+    // Arithmetic
+    Plus, Minus, Star, Slash, Percent,
+
+    // Comparison
+    EqEq, NotEq, Lt, Gt, LtEq, GtEq,
+
+    // Grouping
+    LParen, RParen,
+
+    // Structure
+    Colon, Newline, Indent, Dedent, Eof,
 }
 
 #[derive(Debug, Clone)]
 pub struct LexerError {
     pub line: usize,
+    pub col:  usize,
     pub message: String,
 }
 
 impl std::fmt::Display for LexerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LexerError at line {}: {}", self.line, self.message)
+        write!(f, "LexerError [line {}, col {}]: {}", self.line, self.col, self.message)
     }
 }
 
-/// Lex the full source into a flat token list (with synthetic INDENT/DEDENT).
 pub fn lex(source: &str) -> Result<Vec<Token>, LexerError> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut indent_stack: Vec<usize> = vec![0];
 
     for (line_no, raw_line) in source.lines().enumerate() {
         let line_number = line_no + 1;
-
-        // Skip blank / comment lines
-        let trimmed = raw_line.trim_end();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
+        let trimmed_end = raw_line.trim_end();
+        if trimmed_end.is_empty() || trimmed_end.trim_start().starts_with('#') {
             continue;
         }
 
-        // Count leading spaces for indentation
         let indent = raw_line.len() - raw_line.trim_start().len();
         let current_indent = *indent_stack.last().unwrap();
 
@@ -76,23 +65,20 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexerError> {
             }
             if indent != *indent_stack.last().unwrap() {
                 return Err(LexerError {
-                    line: line_number,
+                    line: line_number, col: 1,
                     message: format!(
-                        "Indentation mismatch: expected {}, got {}",
-                        indent_stack.last().unwrap(),
-                        indent
+                        "Indentation mismatch: expected {} spaces, got {}",
+                        indent_stack.last().unwrap(), indent
                     ),
                 });
             }
         }
 
-        // Tokenize the rest of the line
-        let line_tokens = tokenize_line(trimmed.trim_start(), line_number)?;
+        let line_tokens = tokenize_line(trimmed_end.trim_start(), line_number)?;
         tokens.extend(line_tokens);
         tokens.push(Token::Newline);
     }
 
-    // Close any remaining indents
     while indent_stack.len() > 1 {
         indent_stack.pop();
         tokens.push(Token::Dedent);
@@ -104,104 +90,160 @@ pub fn lex(source: &str) -> Result<Vec<Token>, LexerError> {
 
 fn tokenize_line(line: &str, line_no: usize) -> Result<Vec<Token>, LexerError> {
     let mut tokens = Vec::new();
-    let mut chars = line.chars().peekable();
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
 
-    while let Some(&ch) = chars.peek() {
-        match ch {
-            // Whitespace within a line
-            ' ' | '\t' => { chars.next(); }
-
-            // Comments
+    while i < chars.len() {
+        let col = i + 1;
+        match chars[i] {
+            ' ' | '\t' => { i += 1; }
             '#' => break,
-
-            // Colon
-            ':' => { chars.next(); tokens.push(Token::Colon); }
-
-            // String literals
-            '"' => {
-                chars.next(); // opening quote
+            ':' => { tokens.push(Token::Colon);   i += 1; }
+            '(' => { tokens.push(Token::LParen);  i += 1; }
+            ')' => { tokens.push(Token::RParen);  i += 1; }
+            '+' => { tokens.push(Token::Plus);    i += 1; }
+            '*' => { tokens.push(Token::Star);    i += 1; }
+            '/' => { tokens.push(Token::Slash);   i += 1; }
+            '%' => { tokens.push(Token::Percent); i += 1; }
+            '-' => {
+                let prev_is_value = matches!(
+                    tokens.last(),
+                    Some(Token::NumberLit(_)) | Some(Token::StringLit(_))
+                    | Some(Token::Identifier(_)) | Some(Token::RParen)
+                    | Some(Token::True) | Some(Token::False)
+                );
+                if !prev_is_value && i + 1 < chars.len() && chars[i + 1].is_ascii_digit() {
+                    i += 1;
+                    let (num, new_i) = read_number(&chars, i, line_no, true)?;
+                    tokens.push(num);
+                    i = new_i;
+                } else {
+                    tokens.push(Token::Minus);
+                    i += 1;
+                }
+            }
+            '=' => {
+                if i + 1 < chars.len() && chars[i + 1] == '=' {
+                    tokens.push(Token::EqEq); i += 2;
+                } else {
+                    return Err(LexerError { line: line_no, col,
+                        message: "Unexpected '='. Use 'is' for assignment or '==' for comparison.".into() });
+                }
+            }
+            '!' => {
+                if i + 1 < chars.len() && chars[i + 1] == '=' {
+                    tokens.push(Token::NotEq); i += 2;
+                } else {
+                    return Err(LexerError { line: line_no, col,
+                        message: "Unexpected '!'. Use 'not' for negation or '!=' for not-equal.".into() });
+                }
+            }
+            '<' => {
+                if i + 1 < chars.len() && chars[i + 1] == '=' {
+                    tokens.push(Token::LtEq); i += 2;
+                } else { tokens.push(Token::Lt); i += 1; }
+            }
+            '>' => {
+                if i + 1 < chars.len() && chars[i + 1] == '=' {
+                    tokens.push(Token::GtEq); i += 2;
+                } else { tokens.push(Token::Gt); i += 1; }
+            }
+            '"' | '\'' => {
+                let quote = chars[i];
+                i += 1;
                 let mut s = String::new();
                 loop {
-                    match chars.next() {
-                        Some('"') => break,
-                        Some('\\') => {
-                            match chars.next() {
-                                Some('n') => s.push('\n'),
-                                Some('t') => s.push('\t'),
-                                Some('"') => s.push('"'),
-                                Some('\\') => s.push('\\'),
-                                Some(c) => s.push(c),
-                                None => return Err(LexerError {
-                                    line: line_no,
-                                    message: "Unterminated string escape".into(),
-                                }),
+                    if i >= chars.len() {
+                        return Err(LexerError { line: line_no, col,
+                            message: "Unterminated string literal".into() });
+                    }
+                    match chars[i] {
+                        c if c == quote => { i += 1; break; }
+                        '\\' => {
+                            i += 1;
+                            if i >= chars.len() {
+                                return Err(LexerError { line: line_no, col,
+                                    message: "Unterminated escape sequence".into() });
+                            }
+                            match chars[i] {
+                                'n'  => { s.push('\n'); i += 1; }
+                                't'  => { s.push('\t'); i += 1; }
+                                '"'  => { s.push('"');  i += 1; }
+                                '\'' => { s.push('\''); i += 1; }
+                                '\\' => { s.push('\\'); i += 1; }
+                                c    => { s.push('\\'); s.push(c); i += 1; }
                             }
                         }
-                        Some(c) => s.push(c),
-                        None => return Err(LexerError {
-                            line: line_no,
-                            message: "Unterminated string literal".into(),
-                        }),
+                        c => { s.push(c); i += 1; }
                     }
                 }
                 tokens.push(Token::StringLit(s));
             }
-
-            // Number literals
-            '0'..='9' | '-' => {
-                let mut num = String::new();
-                if ch == '-' { num.push(ch); chars.next(); }
-                while let Some(&d) = chars.peek() {
-                    if d.is_ascii_digit() || d == '.' { num.push(d); chars.next(); }
-                    else { break; }
-                }
-                match num.parse::<f64>() {
-                    Ok(n) => tokens.push(Token::NumberLit(n)),
-                    Err(_) => return Err(LexerError {
-                        line: line_no,
-                        message: format!("Invalid number: {}", num),
-                    }),
-                }
+            c if c.is_ascii_digit() => {
+                let (num, new_i) = read_number(&chars, i, line_no, false)?;
+                tokens.push(num);
+                i = new_i;
             }
-
-            // Identifiers and keywords
-            'a'..='z' | 'A'..='Z' | '_' => {
+            c if c.is_alphabetic() || c == '_' => {
                 let mut word = String::new();
-                while let Some(&c) = chars.peek() {
-                    if c.is_alphanumeric() || c == '_' { word.push(c); chars.next(); }
-                    else { break; }
+                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                    word.push(chars[i]);
+                    i += 1;
                 }
                 tokens.push(keyword_or_ident(word));
             }
-
             c => {
-                return Err(LexerError {
-                    line: line_no,
-                    message: format!("Unexpected character: '{}'", c),
-                });
+                return Err(LexerError { line: line_no, col,
+                    message: format!("Unexpected character: '{}'", c) });
             }
         }
     }
-
     Ok(tokens)
+}
+
+fn read_number(chars: &[char], mut i: usize, line_no: usize, negative: bool)
+    -> Result<(Token, usize), LexerError>
+{
+    let mut num = if negative { "-".to_string() } else { String::new() };
+    let mut has_dot = false;
+    while i < chars.len() {
+        match chars[i] {
+            '.' if !has_dot && i + 1 < chars.len() && chars[i + 1].is_ascii_digit() => {
+                has_dot = true; num.push('.'); i += 1;
+            }
+            c if c.is_ascii_digit() => { num.push(c); i += 1; }
+            _ => break,
+        }
+    }
+    match num.parse::<f64>() {
+        Ok(n)  => Ok((Token::NumberLit(n), i)),
+        Err(_) => Err(LexerError { line: line_no, col: i,
+            message: format!("Invalid number: '{}'", num) }),
+    }
 }
 
 fn keyword_or_ident(word: String) -> Token {
     match word.as_str() {
-        "create" => Token::Create,
-        "is"     => Token::Is,
-        "on"     => Token::On,
-        "if"     => Token::If,
-        "else"   => Token::Else,
-        "while"  => Token::While,
-        "print"  => Token::Print,
-        "let"    => Token::Let,
-        "set"    => Token::Set,
-        "true"   => Token::True,
-        "false"  => Token::False,
-        "and"    => Token::And,
-        "or"     => Token::Or,
-        "not"    => Token::Not,
-        _        => Token::Identifier(word),
+        "create"  => Token::Create,
+        "is"      => Token::Is,
+        "on"      => Token::On,
+        "if"      => Token::If,
+        "else"    => Token::Else,
+        "while"   => Token::While,
+        "print"   => Token::Print,
+        "say"     => Token::Say,
+        "let"     => Token::Let,
+        "set"     => Token::Set,
+        "return"  => Token::Return,
+        "true"    => Token::True,
+        "false"   => Token::False,
+        "and"     => Token::And,
+        "or"      => Token::Or,
+        "not"     => Token::Not,
+        "equals"  => Token::Equals,
+        "greater" => Token::Greater,
+        "less"    => Token::Less,
+        "than"    => Token::Than,
+        _         => Token::Identifier(word),
     }
 }
