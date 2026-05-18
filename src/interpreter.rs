@@ -144,6 +144,8 @@ impl Interpreter {
                     }
                 }
             }
+
+            Statement::While { .. } | Statement::Return(_) => todo!(),
         }
         Ok(())
     }
@@ -204,12 +206,13 @@ impl Interpreter {
             Expr::BoolLit(b)   => Ok(Value::Bool(*b)),
 
             Expr::Var(name) => {
-                local.get(name)
+                let value = local.get(name)
                     .or_else(|| self.vars.get(name))
                     .cloned()
                     .ok_or_else(|| RuntimeError {
                         message: format!("Undefined variable: '{}'", name),
-                    })
+                    })?;
+                Ok(value)
             }
 
             Expr::Not(e) => {
@@ -234,6 +237,15 @@ fn is_truthy(v: &Value) -> bool {
         Value::Number(n) => *n != 0.0,
         Value::String(s) => !s.is_empty(),
         Value::Nil       => false,
+    }
+}
+
+fn numeric_op<F: Fn(f64, f64) -> f64>(l: Value, r: Value, f: F) -> Result<Value, RuntimeError> {
+    match (l, r) {
+        (Value::Number(a), Value::Number(b)) => Ok(Value::Number(f(a, b))),
+        (a, b) => Err(RuntimeError {
+            message: format!("Numeric operation requires numbers, got {:?} and {:?}", a, b),
+        }),
     }
 }
 
@@ -268,15 +280,7 @@ fn eval_binop(op: &BinOpKind, l: Value, r: Value) -> Result<Value, RuntimeError>
             }
             Err(RuntimeError { message: "Division requires numbers".into() })
         }
-    }
-}
-
-fn numeric_op<F: Fn(f64, f64) -> f64>(l: Value, r: Value, f: F) -> Result<Value, RuntimeError> {
-    match (l, r) {
-        (Value::Number(a), Value::Number(b)) => Ok(Value::Number(f(a, b))),
-        (a, b) => Err(RuntimeError {
-            message: format!("Numeric operation requires numbers, got {:?} and {:?}", a, b),
-        }),
+        _ => todo!()
     }
 }
 

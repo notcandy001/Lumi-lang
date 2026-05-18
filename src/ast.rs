@@ -1,107 +1,102 @@
 // ============================================================
-//  Lumi Language — AST (Abstract Syntax Tree)
-//  All nodes produced by the parser live here.
+//  Lumi Language — AST  (v0.2)
 // ============================================================
 
-/// A complete Lumi program is a list of top-level statements.
 pub type Program = Vec<Statement>;
 
-/// Every statement in a Lumi program.
 #[derive(Debug, Clone)]
 pub enum Statement {
     /// create <kind> <name>:
-    ///     <properties>
-    ///     <event handlers>
-    ///     <child components>
+    ///     <body items>
     ComponentDef {
         kind: String,
         name: String,
         body: Vec<ComponentItem>,
     },
 
-    /// let <name> is <value>
-    VarDecl {
-        name: String,
-        value: Expr,
-    },
+    /// let <name> is <expr>
+    VarDecl { name: String, value: Expr },
 
-    /// set <name> is <value>
-    VarSet {
-        name: String,
-        value: Expr,
-    },
+    /// set <name> is <expr>
+    VarSet { name: String, value: Expr },
 
-    /// print <expr>
+    /// print / say <expr>
     Print(Expr),
 
-    /// if <condition>:
-    ///     <body>
+    /// if <cond>:
+    ///     <then>
     /// else:
-    ///     <body>
+    ///     <else>
     IfElse {
         condition: Expr,
         then_body: Vec<Statement>,
         else_body: Option<Vec<Statement>>,
     },
-}
 
-/// Items that can appear inside a component body.
-#[derive(Debug, Clone)]
-pub enum ComponentItem {
-    /// <property> is <value>
-    Property {
-        name: String,
-        value: Expr,
-    },
-
-    /// on <event>:
+    /// while <cond>:
     ///     <body>
-    EventHandler {
-        event: String,
+    While {
+        condition: Expr,
         body: Vec<Statement>,
     },
 
-    /// A nested child component
+    /// return <expr>
+    Return(Expr),
+}
+
+#[derive(Debug, Clone)]
+pub enum ComponentItem {
+    /// <prop> is <expr>
+    Property { name: String, value: Expr },
+
+    /// on <event>:
+    ///     <body>
+    EventHandler { event: String, body: Vec<Statement> },
+
+    /// Nested child component
     Child(Statement),
 }
 
-/// Expressions — values and conditions.
 #[derive(Debug, Clone)]
 pub enum Expr {
     StringLit(String),
     NumberLit(f64),
     BoolLit(bool),
     Var(String),
+
     BinOp {
-        left: Box<Expr>,
-        op: BinOpKind,
+        left:  Box<Expr>,
+        op:    BinOpKind,
         right: Box<Expr>,
     },
+
     Not(Box<Expr>),
 }
 
 #[derive(Debug, Clone)]
 pub enum BinOpKind {
-    And,
-    Or,
-    Eq,   // is (inside expressions)
-    Add,
-    Sub,
-    Mul,
-    Div,
+    // Logical
+    And, Or,
+    // Comparison
+    Eq, NotEq, Lt, Gt, LtEq, GtEq,
+    // Arithmetic
+    Add, Sub, Mul, Div, Mod,
 }
 
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::StringLit(s) => write!(f, "\"{}\"", s),
-            Expr::NumberLit(n) => write!(f, "{}", n),
+            Expr::NumberLit(n) => {
+                if n.fract() == 0.0 { write!(f, "{}", *n as i64) }
+                else { write!(f, "{}", n) }
+            }
             Expr::BoolLit(b)   => write!(f, "{}", b),
             Expr::Var(v)       => write!(f, "{}", v),
             Expr::BinOp { left, op, right } => {
-                write!(f, "({:?} {:?} {:?})", left, op, right)
+                write!(f, "({} {:?} {})", left, op, right)
             }
-            Expr::Not(e) => write!(f, "(not {:?})", e),
+            Expr::Not(e) => write!(f, "(not {})", e),
         }
     }
 }
