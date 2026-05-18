@@ -401,7 +401,7 @@ cargo build --release
 
 ### v0.3 — Modules
 - `import` system
-- `Nisa` entry module
+- `lumi` entry module
 - Multi-file programs
 
 ### v0.4 — UI Runtime
