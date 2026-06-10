@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build — ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: lumi
+            asset: lumi-linux-x86_64
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: lumi.exe
+            asset: lumi-windows-x86_64.exe
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary: lumi
+            asset: lumi-macos-x86_64
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            binary: lumi
+            asset: lumi-macos-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Linux GUI deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            pkg-config
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Lumi ${{ github.ref_name }}
+          body: |
+            ## Lumi ${{ github.ref_name }}
+
+            ### Downloads
+            | Platform | File |
+            |----------|------|
+            | Linux x86_64 | `lumi-linux-x86_64` |
+            | Windows x86_64 | `lumi-windows-x86_64.exe` |
+            | macOS Intel | `lumi-macos-x86_64` |
+            | macOS Apple Silicon | `lumi-macos-arm64` |
+
+            ### Install
+            ```bash
+            chmod +x lumi-linux-x86_64
+            ./lumi-linux-x86_64 yourfile.lu
+            ```
+          files: artifacts/**/*
