@@ -76,6 +76,15 @@ impl ComponentInstance {
     }
 }
 
+// ── Control flow signals ─────────────────────────────────────
+
+#[derive(Debug)]
+enum Signal {
+    Break,
+    Continue,
+    Return(Value),
+}
+
 // ── Interpreter ──────────────────────────────────────────────
 
 pub struct Interpreter {
@@ -106,7 +115,7 @@ impl Interpreter {
         &mut self,
         stmt: &Statement,
         local: &mut HashMap<String, Value>,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<Option<Signal>, RuntimeError> {
         match stmt {
             Statement::ComponentDef { kind, name, body } => {
                 let component = self.build_component(kind, name, body, local)?;
@@ -134,20 +143,91 @@ impl Interpreter {
 
             Statement::IfElse { condition, then_body, else_body } => {
                 let cond = self.eval_expr(condition, local)?;
-                if is_truthy(&cond) {
-                    for s in then_body {
-                        self.exec_statement(s, local)?;
-                    }
-                } else if let Some(else_stmts) = else_body {
-                    for s in else_stmts {
-                        self.exec_statement(s, local)?;
+                let branch = if is_truthy(&cond) { Some(then_body) } else { else_body.as_ref() };
+                if let Some(stmts) = branch {
+                    for s in stmts {
+                        if let Some(sig) = self.exec_statement(s, local)? {
+                            return Ok(Some(sig));
+                        }
                     }
                 }
             }
 
-            Statement::While { .. } | Statement::Return(_) => todo!(),
+            Statement::While { condition, body } => {
+                loop {
+                    let cond = self.eval_expr(condition, local)?;
+                    if !is_truthy(&cond) { break; }
+                    for s in body {
+                        match self.exec_statement(s, local)? {
+                            Some(Signal::Break)    => return Ok(None),
+                            Some(Signal::Continue) => break,
+                            Some(sig)              => return Ok(Some(sig)),
+                            None                   => {}
+                        }
+                    }
+                }
+            }
+
+            Statement::Loop { body } => {
+                loop {
+                    for s in body {
+                        match self.exec_statement(s, local)? {
+                            Some(Signal::Break)    => return Ok(None),
+                            Some(Signal::Continue) => break,
+                            Some(sig)              => return Ok(Some(sig)),
+                            None                   => {}
+                        }
+                    }
+                }
+            }
+
+            Statement::For { var, start, end, body } => {
+                let start_val = self.eval_expr(start, local)?;
+                let end_val   = self.eval_expr(end,   local)?;
+                let (s, e) = match (&start_val, &end_val) {
+                    (Value::Number(a), Value::Number(b)) => (*a as i64, *b as i64),
+                    _ => return Err(RuntimeError { message: "for loop bounds must be numbers".into() }),
+                };
+                'outer: for i in s..=e {
+                    local.insert(var.clone(), Value::Number(i as f64));
+                    self.vars.insert(var.clone(), Value::Number(i as f64));
+                    for s in body {
+                        match self.exec_statement(s, local)? {
+                            Some(Signal::Break)    => break 'outer,
+                            Some(Signal::Continue) => break,
+                            Some(sig)              => return Ok(Some(sig)),
+                            None                   => {}
+                        }
+                    }
+                }
+            }
+
+            Statement::RepeatTimes { count, body } => {
+                let n = match self.eval_expr(count, local)? {
+                    Value::Number(n) => n as i64,
+                    _ => return Err(RuntimeError { message: "'repeat N times' requires a number".into() }),
+                };
+                'outer: for _ in 0..n {
+                    for s in body {
+                        match self.exec_statement(s, local)? {
+                            Some(Signal::Break)    => break 'outer,
+                            Some(Signal::Continue) => break,
+                            Some(sig)              => return Ok(Some(sig)),
+                            None                   => {}
+                        }
+                    }
+                }
+            }
+
+            Statement::Break    => return Ok(Some(Signal::Break)),
+            Statement::Continue => return Ok(Some(Signal::Continue)),
+
+            Statement::Return(expr) => {
+                let v = self.eval_expr(expr, local)?;
+                return Ok(Some(Signal::Return(v)));
+            }
         }
-        Ok(())
+        Ok(None)
     }
 
     // ── Component builder ────────────────────────────────────
@@ -173,9 +253,6 @@ impl Interpreter {
 
                 ComponentItem::EventHandler { event, body: handler_body } => {
                     println!("  [event: on {}]", event);
-                    // In a real UI runtime this would register a callback.
-                    // For the interpreter demo we fire the handler immediately
-                    // so you can see console output.
                     for stmt in handler_body {
                         self.exec_statement(stmt, local)?;
                     }
@@ -280,7 +357,28 @@ fn eval_binop(op: &BinOpKind, l: Value, r: Value) -> Result<Value, RuntimeError>
             }
             Err(RuntimeError { message: "Division requires numbers".into() })
         }
-        _ => todo!()
+        BinOpKind::Mod => {
+            if let (Value::Number(a), Value::Number(b)) = (&l, &r) {
+                if *b == 0.0 {
+                    return Err(RuntimeError { message: "Modulo by zero".into() });
+                }
+                return Ok(Value::Number(a % b));
+            }
+            Err(RuntimeError { message: "Modulo requires numbers".into() })
+        }
+        BinOpKind::NotEq => {
+            let eq = match (&l, &r) {
+                (Value::Number(a), Value::Number(b)) => (a - b).abs() < 1e-10,
+                (Value::String(a), Value::String(b)) => a == b,
+                (Value::Bool(a),   Value::Bool(b))   => a == b,
+                _ => false,
+            };
+            Ok(Value::Bool(!eq))
+        }
+        BinOpKind::Lt  => numeric_op(l, r, |a, b| if a <  b { 1.0 } else { 0.0 }).map(|v| Value::Bool(matches!(v, Value::Number(n) if n == 1.0))),
+        BinOpKind::Gt  => numeric_op(l, r, |a, b| if a >  b { 1.0 } else { 0.0 }).map(|v| Value::Bool(matches!(v, Value::Number(n) if n == 1.0))),
+        BinOpKind::LtEq => numeric_op(l, r, |a, b| if a <= b { 1.0 } else { 0.0 }).map(|v| Value::Bool(matches!(v, Value::Number(n) if n == 1.0))),
+        BinOpKind::GtEq => numeric_op(l, r, |a, b| if a >= b { 1.0 } else { 0.0 }).map(|v| Value::Bool(matches!(v, Value::Number(n) if n == 1.0))),
     }
 }
 

@@ -40,6 +40,34 @@ pub enum Statement {
         body: Vec<Statement>,
     },
 
+    /// loop:
+    ///     <body>
+    Loop {
+        body: Vec<Statement>,
+    },
+
+    /// for <var> in <start> to <end>:
+    ///     <body>
+    For {
+        var: String,
+        start: Expr,
+        end: Expr,
+        body: Vec<Statement>,
+    },
+
+    /// repeat <n> times:
+    ///     <body>
+    RepeatTimes {
+        count: Expr,
+        body: Vec<Statement>,
+    },
+
+    /// break
+    Break,
+
+    /// continue
+    Continue,
+
     /// return <expr>
     Return(Expr),
 }

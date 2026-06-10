@@ -86,6 +86,11 @@ impl Parser {
             Token::Print | Token::Say => self.parse_print(),
             Token::If     => self.parse_if_else(),
             Token::While  => self.parse_while(),
+            Token::For    => self.parse_for(),
+            Token::Repeat => self.parse_repeat_times(),
+            Token::Loop   => self.parse_loop(),
+            Token::Break  => { self.advance(); self.consume_newline(); Ok(Statement::Break) }
+            Token::Continue => { self.advance(); self.consume_newline(); Ok(Statement::Continue) }
             Token::Return => self.parse_return(),
             t => Err(ParseError {
                 message: format!("Unexpected token at statement level: {:?}", t),
@@ -252,6 +257,49 @@ impl Parser {
         self.consume_newline();
         let body = self.parse_block()?;
         Ok(Statement::While { condition, body })
+    }
+
+    /// loop:
+    ///     <body>
+    fn parse_loop(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // `loop`
+        self.expect(&Token::Colon)?;
+        self.consume_newline();
+        let body = self.parse_block()?;
+        Ok(Statement::Loop { body })
+    }
+
+    /// for <var> in <start> to <end>:
+    ///     <body>
+    fn parse_for(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // `for`
+        let var = self.expect_ident("loop variable")?;
+        self.expect(&Token::In)?;
+        let start = self.parse_expr()?;
+        // expect `to` as identifier (not a keyword yet, treated as ident)
+        match self.peek().clone() {
+            Token::Identifier(ref s) if s == "to" => { self.advance(); }
+            t => return Err(ParseError {
+                message: format!("Expected 'to' in for loop, got {:?}", t),
+            }),
+        }
+        let end = self.parse_expr()?;
+        self.expect(&Token::Colon)?;
+        self.consume_newline();
+        let body = self.parse_block()?;
+        Ok(Statement::For { var, start, end, body })
+    }
+
+    /// repeat <n> times:
+    ///     <body>
+    fn parse_repeat_times(&mut self) -> Result<Statement, ParseError> {
+        self.advance(); // `repeat`
+        let count = self.parse_expr()?;
+        self.expect(&Token::Times)?;
+        self.expect(&Token::Colon)?;
+        self.consume_newline();
+        let body = self.parse_block()?;
+        Ok(Statement::RepeatTimes { count, body })
     }
 
     fn parse_return(&mut self) -> Result<Statement, ParseError> {
