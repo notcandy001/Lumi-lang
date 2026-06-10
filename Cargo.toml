@@ -12,3 +12,5 @@ name = "lumi"
 path = "src/main.rs"
 
 [dependencies]
+eframe = "0.27"
+egui = "0.27"

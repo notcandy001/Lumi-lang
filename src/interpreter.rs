@@ -241,20 +241,34 @@ impl Interpreter {
     ) -> Result<ComponentInstance, RuntimeError> {
         let mut instance = ComponentInstance::new(kind, name);
 
-        println!("▸ Creating {} \"{}\"", kind, name);
-
         for item in body {
             match item {
                 ComponentItem::Property { name: prop_name, value } => {
                     let v = self.eval_expr(value, local)?;
-                    println!("  {} = {}", prop_name, v);
                     instance.properties.insert(prop_name.clone(), v);
                 }
 
                 ComponentItem::EventHandler { event, body: handler_body } => {
-                    println!("  [event: on {}]", event);
-                    for stmt in handler_body {
-                        self.exec_statement(stmt, local)?;
+                    // Capture print output from the handler body and store it
+                    // as a `click_output` property so the GUI can replay it on click.
+                    if event == "click" {
+                        let mut captured = Vec::new();
+                        for stmt in handler_body {
+                            if let Statement::Print(expr) = stmt {
+                                let v = self.eval_expr(expr, local)?;
+                                captured.push(v.to_string());
+                            } else {
+                                self.exec_statement(stmt, local)?;
+                            }
+                        }
+                        instance.properties.insert(
+                            "click_output".to_string(),
+                            Value::String(captured.join("\n")),
+                        );
+                    } else {
+                        for stmt in handler_body {
+                            self.exec_statement(stmt, local)?;
+                        }
                     }
                 }
 
