@@ -1,7 +1,5 @@
-// ============================================================
 //  Lumi Language — Interpreter / Runtime
 //  Tree-walk interpreter that executes the AST directly.
-// ============================================================
 
 use std::collections::HashMap;
 use crate::ast::*;
@@ -13,6 +11,7 @@ pub enum Value {
     String(String),
     Number(f64),
     Bool(bool),
+    #[allow(dead_code)]
     Nil,
 }
 
@@ -82,6 +81,7 @@ impl ComponentInstance {
 enum Signal {
     Break,
     Continue,
+    #[allow(dead_code)]
     Return(Value),
 }
 
