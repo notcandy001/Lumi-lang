@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write      
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -70,10 +70,14 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Rename binary
+      - name: Rename binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset }}
+
+      - name: Rename binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset }}
         shell: bash
-        run: |
-          cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -92,6 +96,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -108,9 +113,9 @@ jobs:
             | macOS Intel | `lumi-macos-x86_64` |
             | macOS Apple Silicon | `lumi-macos-arm64` |
 
-            ### Install
+            ### Install (Linux/macOS)
             ```bash
             chmod +x lumi-linux-x86_64
             ./lumi-linux-x86_64 yourfile.lu
             ```
-          files: artifacts/**/*
+          files: artifacts/*

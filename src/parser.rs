@@ -418,8 +418,8 @@ impl Parser {
             self.advance();
             let operand = self.parse_primary()?;
             return Ok(Expr::BinOp {
-                left:  Box::new(Expr::NumberLit(0.0)),
-                op:    BinOpKind::Sub,
+                left: Box::new(Expr::NumberLit(0.0)),
+                op: BinOpKind::Sub,
                 right: Box::new(operand),
             });
         }
@@ -428,10 +428,10 @@ impl Parser {
 
     fn parse_primary(&mut self) -> Result<Expr, ParseError> {
         match self.advance() {
-            Token::StringLit(s)  => Ok(Expr::StringLit(s)),
-            Token::NumberLit(n)  => Ok(Expr::NumberLit(n)),
-            Token::True          => Ok(Expr::BoolLit(true)),
-            Token::False         => Ok(Expr::BoolLit(false)),
+            Token::StringLit(s) => Ok(Expr::StringLit(s)),
+            Token::NumberLit(n) => Ok(Expr::NumberLit(n)),
+            Token::True => Ok(Expr::BoolLit(true)),
+            Token::False => Ok(Expr::BoolLit(false)),
             Token::Identifier(v) => Ok(Expr::Var(v)),
             Token::LParen => {
                 let expr = self.parse_expr()?;

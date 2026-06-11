@@ -33,7 +33,7 @@ pub enum Token {
 #[derive(Debug, Clone)]
 pub struct LexerError {
     pub line: usize,
-    pub col:  usize,
+    pub col: usize,
     pub message: String,
 }
 
