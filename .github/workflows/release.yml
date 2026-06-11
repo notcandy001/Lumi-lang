@@ -33,11 +33,6 @@ jobs:
             binary: lumi
             asset: lumi-macos-x86_64
 
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            binary: lumi
-            asset: lumi-macos-arm64
-
     steps:
       - uses: actions/checkout@v4
 
@@ -76,8 +71,8 @@ jobs:
 
       - name: Rename binary (Windows)
         if: matrix.os == 'windows-latest'
-        run: cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset }}
         shell: bash
+        run: cp target/${{ matrix.target }}/release/${{ matrix.binary }} ${{ matrix.asset }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -111,11 +106,10 @@ jobs:
             | Linux x86_64 | `lumi-linux-x86_64` |
             | Windows x86_64 | `lumi-windows-x86_64.exe` |
             | macOS Intel | `lumi-macos-x86_64` |
-            | macOS Apple Silicon | `lumi-macos-arm64` |
 
             ### Install (Linux/macOS)
-            ```bash
+```bash
             chmod +x lumi-linux-x86_64
             ./lumi-linux-x86_64 yourfile.lu
-            ```
+```
           files: artifacts/*
