@@ -96,20 +96,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Lumi ${{ github.ref_name }}
-          body: |
-            ## Lumi ${{ github.ref_name }}
-
-            ### Downloads
-            | Platform | File |
-            |----------|------|
-            | Linux x86_64 | `lumi-linux-x86_64` |
-            | Windows x86_64 | `lumi-windows-x86_64.exe` |
-            | macOS Intel | `lumi-macos-x86_64` |
-
-            ### Install (Linux/macOS)
-```bash
-            chmod +x lumi-linux-x86_64
-            ./lumi-linux-x86_64 yourfile.lu
-```
+          name: "Lumi ${{ github.ref_name }}"
           files: artifacts/*
