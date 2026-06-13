@@ -1,7 +1,6 @@
-# ============================================================
 #  counter.lu — Simple counter app
 #  Run: lumi counter.lu
-# ============================================================
+
 
 let count is 0
 let app_title is "Lumi Counter"
