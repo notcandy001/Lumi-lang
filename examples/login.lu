@@ -1,7 +1,6 @@
-# ============================================================
 #  login.lu — Login form demo
 #  Run: lumi login.lu
-# ============================================================
+
 
 let is_authenticated is false
 let app_version is "1.0"
